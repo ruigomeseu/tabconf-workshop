@@ -2,6 +2,8 @@ const express = require('express');
 const app = express();
 const port = 3000;
 
+const crypto = require('crypto');
+
 const low = require('lowdb');
 const FileSync = require('lowdb/adapters/FileSync');
 const adapter = new FileSync('db.json');
@@ -10,6 +12,8 @@ db.defaults({ messages: [] }).write();
 
 const axios = require('axios');
 const uuidv4 = require('uuid/v4');
+
+const opennodeKey = '95164e77-7feb-43f1-9fb7-f5c1149d84dc';
 
 const ngrok = require('ngrok');
 let url;
@@ -49,7 +53,7 @@ app.post('/messages', async (req, res) => {
         description: 'Message to TABConf',
         order_id: id,
         callback_url: url + '/opennode-callback'
-    }, { headers: { Authorization: '95164e77-7feb-43f1-9fb7-f5c1149d84dc' } })
+    }, { headers: { Authorization: opennodeKey } })
         .then(response => {
             res.render('payment.ejs', { payreq: response.data.data.lightning_invoice.payreq });
         })
@@ -57,6 +61,18 @@ app.post('/messages', async (req, res) => {
 });
 
 app.post('/opennode-callback', (req, res) => {
+    const id = req.body.id;
+    const hashed_order = req.body.hashed_order;
+    const status = req.body.status;
+
+    if (crypto.createHmac('sha256', opennodeKey).update(id).digest('hex') !== hashed_order) {
+        return res.send('Fake callback');
+    }
+
+    if (status !== 'paid') {
+        return res.send('Not paid yet');
+    }
+
     db.get('messages')
         .find({ id: req.body.order_id })
         .assign({ paid: true })
