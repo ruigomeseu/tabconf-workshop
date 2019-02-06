@@ -28,6 +28,7 @@ app.set('view engine', 'html');
 
 app.get('/', (req, res) => {
     const messages = db.get('messages')
+        .filter({ paid: true })
         .value();
 
     return res.render('index.ejs', { messages });
@@ -47,11 +48,21 @@ app.post('/messages', async (req, res) => {
         amount: 1,
         description: 'Message to TABConf',
         order_id: id,
+        callback_url: url + '/opennode-callback'
     }, { headers: { Authorization: '95164e77-7feb-43f1-9fb7-f5c1149d84dc' } })
         .then(response => {
             res.render('payment.ejs', { payreq: response.data.data.lightning_invoice.payreq });
         })
         .catch(error => console.log(error.response.data));
+});
+
+app.post('/opennode-callback', (req, res) => {
+    db.get('messages')
+        .find({ id: req.body.order_id })
+        .assign({ paid: true })
+        .write();
+
+    return res.send('OK');
 });
 
 app.listen(port, () => console.log(`App listening on port ${port}!`));
